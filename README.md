@@ -1,5 +1,11 @@
 # hey
 
+[![crates.io](https://img.shields.io/crates/v/ai-in-terminal.svg?style=flat-square&logo=rust)](https://crates.io/crates/ai-in-terminal)
+[![downloads](https://img.shields.io/crates/d/ai-in-terminal.svg?style=flat-square)](https://crates.io/crates/ai-in-terminal)
+[![license](https://img.shields.io/crates/l/ai-in-terminal.svg?style=flat-square)](./LICENSE)
+[![ci](https://img.shields.io/github/actions/workflow/status/subinium/hey-cli/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/subinium/hey-cli/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/subinium/hey-cli?style=flat-square&label=release)](https://github.com/subinium/hey-cli/releases/latest)
+
 > `hey` — talk to your terminal in plain English. Speaks **Claude**, **Codex**, and **OpenRouter**.
 
 ```
@@ -30,13 +36,74 @@ Nothing more. No interactive chat, no file reading, no project context. Just: *r
 
 ## Install
 
+### From crates.io (recommended)
+
 ```sh
-cargo install --path .
-# or
-cargo build --release && cp target/release/hey ~/.local/bin/
+cargo install ai-in-terminal
 ```
 
-> The crate is **`ai-in-terminal`** on crates.io; the binary is **`hey`**.
+This installs the `hey` binary to `~/.cargo/bin/hey`. Make sure `~/.cargo/bin` is on your `PATH`.
+
+### From pre-built binaries
+
+Grab a tarball for your platform from the [latest release](https://github.com/subinium/hey-cli/releases/latest) and drop the `hey` binary into your `PATH`:
+
+```sh
+# macOS (Apple Silicon)
+curl -L https://github.com/subinium/hey-cli/releases/latest/download/hey-aarch64-apple-darwin.tar.gz | tar xz
+sudo mv hey /usr/local/bin/
+
+# macOS (Intel)
+curl -L https://github.com/subinium/hey-cli/releases/latest/download/hey-x86_64-apple-darwin.tar.gz | tar xz
+
+# Linux (x86_64)
+curl -L https://github.com/subinium/hey-cli/releases/latest/download/hey-x86_64-unknown-linux-gnu.tar.gz | tar xz
+```
+
+### From source
+
+```sh
+git clone https://github.com/subinium/hey-cli
+cd hey-cli
+cargo install --path .
+```
+
+> The crate on crates.io is **`ai-in-terminal`**; the installed binary is **`hey`**.
+
+### First-time setup
+
+`hey` needs at least one backend configured. Pick whichever you already have:
+
+```sh
+# Option A — Claude Code (uses your existing login, nothing to configure)
+which claude   # make sure Claude Code is installed and on PATH
+
+# Option B — Codex CLI (uses your existing login)
+which codex
+
+# Option C — OpenRouter (HTTP API, fastest cold start)
+export OPENROUTER_API_KEY=sk-or-...
+```
+
+If more than one is available, `hey` picks them in order: `claude → codex → openrouter`. Override with `-c`, `-x`, `-b openrouter`, or `AIT_BACKEND`.
+
+## Quick start
+
+```sh
+$ hey find the 5 largest files in ~/Downloads
+
+  ╭─ hey · ✱ claude · headless
+  │
+  │  ✱  here you go
+  │
+  │  $ du -ah ~/Downloads | sort -rh | head -5
+  │
+  │  list everything under Downloads with sizes, sort descending, keep the top five
+  │
+  ╰─❯  [Y]es  [n]o  [e]dit  › _
+```
+
+Press **Enter** to run the command, **n** to abort, **e** to edit it first.
 
 ## Usage
 
