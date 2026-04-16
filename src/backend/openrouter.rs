@@ -6,6 +6,9 @@ use crate::sanitize::sanitize_command;
 
 pub(crate) const DEFAULT_MODEL: &str = "anthropic/claude-haiku-4.5";
 const API_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
+// Cap on the response body so a compromised or rogue endpoint can't exhaust
+// memory. 1 MiB is ~4000× the size of a typical 256-token completion.
+const MAX_RESPONSE_BYTES: u64 = 1_048_576;
 
 #[derive(Serialize)]
 struct ChatRequest<'a> {
@@ -70,13 +73,32 @@ pub(crate) async fn ask_openrouter(
         .await
         .context("failed to reach OpenRouter")?;
 
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(anyhow!("API error {status}: {text}"));
+    let status = resp.status();
+    // Refuse oversized bodies up front via Content-Length (best-effort).
+    if let Some(len) = resp.content_length() {
+        if len > MAX_RESPONSE_BYTES {
+            return Err(anyhow!(
+                "OpenRouter response too large ({len} bytes, cap {MAX_RESPONSE_BYTES})"
+            ));
+        }
     }
 
-    let parsed: ChatResponse = resp.json().await.context("invalid API response")?;
+    let bytes = resp.bytes().await.context("read response body")?;
+    if bytes.len() as u64 > MAX_RESPONSE_BYTES {
+        return Err(anyhow!(
+            "OpenRouter response exceeded {MAX_RESPONSE_BYTES} bytes"
+        ));
+    }
+
+    if !status.is_success() {
+        let text = String::from_utf8_lossy(&bytes);
+        return Err(anyhow!(
+            "API error {status}: {}",
+            crate::sanitize::strip_ansi(&text)
+        ));
+    }
+
+    let parsed: ChatResponse = serde_json::from_slice(&bytes).context("invalid API response")?;
 
     let text = parsed
         .choices

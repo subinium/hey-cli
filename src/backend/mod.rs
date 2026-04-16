@@ -124,6 +124,7 @@ pub(crate) fn resolve_auto_chain() -> Result<Vec<Backend>> {
     Ok(chain)
 }
 
+#[allow(dead_code)]
 pub(crate) fn post_cli_backend_output(name: &str, output: std::process::Output) -> Result<String> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

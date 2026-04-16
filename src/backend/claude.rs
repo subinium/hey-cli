@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use std::env;
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 
 use crate::prompt::SYSTEM_PROMPT;
 use crate::sanitize::sanitize_command;
@@ -10,6 +10,7 @@ use crate::sanitize::sanitize_command;
 const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const ANTHROPIC_MODEL: &str = "claude-haiku-4-5-20251001";
+const MAX_RESPONSE_BYTES: u64 = 1_048_576; // 1 MiB cap on API response
 
 /// Claude backend: prefer direct Anthropic API (~2s) when ANTHROPIC_API_KEY is
 /// available, fall back to `claude -p` subprocess (~6s) when it's not.
@@ -42,13 +43,36 @@ async fn ask_anthropic_direct(api_key: &str, user_prompt: &str) -> Result<String
         .await
         .context("failed to reach Anthropic API")?;
 
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(anyhow!("Anthropic API error {status}: {text}"));
+    let status = resp.status();
+    if let Some(len) = resp.content_length() {
+        if len > MAX_RESPONSE_BYTES {
+            return Err(anyhow!(
+                "Anthropic response too large ({len} bytes, cap {MAX_RESPONSE_BYTES})"
+            ));
+        }
+    }
+    let bytes = resp.bytes().await.context("read Anthropic response")?;
+    if bytes.len() as u64 > MAX_RESPONSE_BYTES {
+        return Err(anyhow!(
+            "Anthropic response exceeded {MAX_RESPONSE_BYTES} bytes"
+        ));
     }
 
-    let parsed: serde_json::Value = resp.json().await.context("invalid Anthropic response")?;
+    if !status.is_success() {
+        let text = String::from_utf8_lossy(&bytes);
+        let safe = crate::sanitize::strip_ansi(&text);
+        // 401 / 403 are almost always an invalid or expired API key.
+        if status.as_u16() == 401 || status.as_u16() == 403 {
+            return Err(anyhow!(
+                "Anthropic API rejected the key ({status}). Check ANTHROPIC_API_KEY, or unset it to use `claude login` subprocess mode.\n{}",
+                safe.trim()
+            ));
+        }
+        return Err(anyhow!("Anthropic API error {status}: {safe}"));
+    }
+
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&bytes).context("invalid Anthropic response")?;
     let text = parsed["content"]
         .as_array()
         .and_then(|arr| arr.iter().find(|b| b["type"] == "text"))
@@ -82,5 +106,35 @@ fn ask_claude_code(user_prompt: &str) -> Result<String> {
     let output = child
         .wait_with_output()
         .context("failed to wait on claude")?;
-    super::post_cli_backend_output("claude", output)
+
+    if !output.status.success() {
+        return Err(classify_claude_error(&output));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    Ok(sanitize_command(&stdout))
+}
+
+/// Parse `claude -p` stderr/stdout for common failure modes and return a
+/// friendlier error. Falls back to the generic exit-status message.
+fn classify_claude_error(output: &Output) -> anyhow::Error {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let combined = format!("{stderr}\n{stdout}").to_lowercase();
+
+    if combined.contains("not authenticated")
+        || combined.contains("please login")
+        || combined.contains("please log in")
+        || combined.contains("no api key")
+        || combined.contains("anthropic api key")
+        || combined.contains("unauthorized")
+    {
+        return anyhow!(
+            "claude is not authenticated — run `claude login`, or set ANTHROPIC_API_KEY to use the direct API"
+        );
+    }
+    if combined.contains("rate limit") || combined.contains("quota") {
+        return anyhow!("claude is rate-limited — try `hey codex ...` or `hey openrouter ...`");
+    }
+
+    anyhow!("claude exited with {}: {}", output.status, stderr.trim())
 }

@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-17
+
+Security audit + UX pass. Breaking in a few narrow places but safer everywhere.
+
+### Security
+
+- **Risk gate rewritten** with segment-aware parsing so command substitutions (`$(rm ...)`, `<(rm ...)`, `>(rm ...)`, backticks) and process substitution now classify correctly instead of silently bypassing as Safe.
+- **Whitespace obfuscation blocked** — `rm` hidden by tabs, `$IFS`, `${IFS}` is caught.
+- **Interpreter guard** — `python -c`, `perl -e`, `node -e`, `ruby -e`, `awk 'BEGIN{...'` surface Warn so obfuscated destructive calls don't land as Safe.
+- **Decoded shell pipes blocked** — `base64 -d | sh`, `xxd -r | bash`, `openssl enc -d | sh` now Block.
+- **More destructive primitives blocked** — `truncate`, `: > file`, `true > file`, `cp /dev/null target`, `git reset --hard`, `git clean -fd`, `git push --force`.
+- **`rm` false-positive fixed** — v0.3 blocked anything containing the token `rm` (including `grep rm logfile`). v0.4 only blocks when `rm` is a command-position first token of a segment.
+- **Content filter expanded** — fine-grained GitHub PATs (`ghu_`, `ghs_`, `ghr_`, `github_pat_`), Stripe, SendGrid, HuggingFace, JWT, Google service-account JSON, Azure storage, and any URL with embedded credentials (`scheme://user:pass@host`).
+- **Codex tempfile hardened** — replaced predictable `/tmp/ait-codex-<pid>.txt` with `tempfile::NamedTempFile` (O_EXCL, mode 0600, auto-cleanup on Drop). Closes a symlink/TOCTOU vector.
+- **Codex prompt via stdin** — was visible in `ps` / `/proc/<pid>/cmdline`; now piped via stdin.
+- **HTTP response size cap (1 MiB)** — OpenRouter and direct Anthropic API responses are Content-Length-checked and capped during read.
+- **ANSI escape sanitization** — model output and backend error text is stripped of ESC sequences (CSI / OSC) before display, closing OSC-52 clipboard-injection.
+- **`hey doctor` no longer leaks key body** — shows only the public prefix (`sk-or-v1-****`).
+- 19 unit tests added for the risk gate.
+
+### UX
+
+- **`hey doctor`** — new diagnostic subcommand. Shows detected backends, preset tools, shell/TTY state, env-var config, and the active auto chain.
+- **`hey init <shell>`** — emits a shell completion script (bash / zsh / fish / powershell / elvish).
+- **Stdin prompt support** — `echo "list docker containers" | hey --yes`. Requires `--yes` or `--dry-run` since confirm can't read.
+- **EOF = abort** — pressing Ctrl-D (or piping `hey foo < /dev/null`) now aborts with `aborted (no input)` instead of silently running.
+- **Warn requires explicit `y`** — for `Risk::Warn` commands the default is capital `N`; blank Enter aborts.
+- **Stdout-not-TTY refusal** — `hey foo | head` used to hang; now errors with a suggestion to pass `--yes` or `--dry-run`.
+- **Edit → copy & edit in shell** — `e` at the confirm prompt copies the command to your clipboard, reports whether the copy succeeded, and aborts. Paste in your shell for readline editing.
+- **Richer help text and error messages** — `--help` documents subcommand-style backend selection; `OPENROUTER_API_KEY not set` points at `openrouter.ai/keys`; Claude `not authenticated` surfaces `claude login`.
+- **Narrow-terminal-safe thinking animation** — uses `\x1b[J` so wrapped lines don't leave cruft on <70-col terminals.
+
+### Breaking changes
+
+- `or` shorthand for `openrouter` removed — too ambiguous with the English preposition.
+- Backend subcommand matching is now case-sensitive lowercase — `hey Claude is fast` is a prompt.
+- `Risk::Warn` no longer defaults to Yes on blank Enter.
+- EOF on the confirm prompt aborts instead of running.
+- `hey foo | head` refuses without `--yes` / `--dry-run`.
+
 ## [0.2.2] - 2026-04-16
 
 ### Changed
@@ -60,6 +100,7 @@ Initial release.
 - Fenced-code-block sanitizer so model responses with triple-backtick wrappers are parsed correctly
 - Strict prose detection — bail out if the backend returns non-command text
 
+[0.4.0]: https://github.com/subinium/hey-cli/releases/tag/v0.4.0
 [0.2.2]: https://github.com/subinium/hey-cli/releases/tag/v0.2.2
 [0.2.1]: https://github.com/subinium/hey-cli/releases/tag/v0.2.1
 [0.2.0]: https://github.com/subinium/hey-cli/releases/tag/v0.2.0
