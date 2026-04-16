@@ -388,23 +388,48 @@ fn ask_codex(user_prompt: &str) -> Result<String> {
         .arg(&tmp)
         .arg(&full_prompt)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
+        .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
         .context("failed to spawn `codex` (is Codex CLI installed?)")?;
 
-    if !output.status.success() {
-        let _ = std::fs::remove_file(&tmp);
-        let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let content = std::fs::read_to_string(&tmp).unwrap_or_default();
+    let _ = std::fs::remove_file(&tmp);
+
+    let haystack = format!("{}\n{}\n{}", stderr, stdout, content).to_lowercase();
+    if haystack.contains("usage limit")
+        || haystack.contains("hit your")
+        || haystack.contains("rate limit")
+        || haystack.contains("quota")
+    {
         return Err(anyhow!(
-            "codex exited with {}: {}",
-            output.status,
+            "codex is rate-limited — try `hey claude ...` or `hey openrouter ...` instead"
+        ));
+    }
+    if !haystack.is_empty() && haystack.contains("not authenticated") {
+        return Err(anyhow!("codex not authenticated — run `codex login` first"));
+    }
+
+    if !output.status.success() {
+        let msg = if !stderr.trim().is_empty() {
+            stderr.trim().to_string()
+        } else if !content.trim().is_empty() {
+            content.trim().to_string()
+        } else {
+            "unknown error".to_string()
+        };
+        return Err(anyhow!("codex exited with {}: {}", output.status, msg));
+    }
+
+    if content.trim().is_empty() {
+        return Err(anyhow!(
+            "codex returned no content (stderr: {})",
             stderr.trim()
         ));
     }
 
-    let content = std::fs::read_to_string(&tmp).context("failed to read codex output file")?;
-    let _ = std::fs::remove_file(&tmp);
     Ok(sanitize_command(&content))
 }
 
@@ -701,18 +726,26 @@ fn which_bin(bin: &str) -> bool {
     false
 }
 
-fn resolve_auto_backend() -> Result<Backend> {
+/// Returns the full ordered list of backends to try in Auto mode, filtered by
+/// local availability. Claude first (subscription inline), then Codex, then
+/// OpenRouter (HTTP fallback).
+fn resolve_auto_chain() -> Result<Vec<Backend>> {
+    let mut chain = Vec::new();
     if which_bin("claude") {
-        Ok(Backend::Claude)
-    } else if which_bin("codex") {
-        Ok(Backend::Codex)
-    } else if env::var("OPENROUTER_API_KEY").is_ok() {
-        Ok(Backend::Openrouter)
-    } else {
-        Err(anyhow!(
-            "no backend available: install `claude` or `codex`, or set OPENROUTER_API_KEY"
-        ))
+        chain.push(Backend::Claude);
     }
+    if which_bin("codex") {
+        chain.push(Backend::Codex);
+    }
+    if env::var("OPENROUTER_API_KEY").is_ok() {
+        chain.push(Backend::Openrouter);
+    }
+    if chain.is_empty() {
+        return Err(anyhow!(
+            "no backend available: install `claude` or `codex`, or set OPENROUTER_API_KEY"
+        ));
+    }
+    Ok(chain)
 }
 
 fn print_command_block(
@@ -773,7 +806,7 @@ fn print_command_block(
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     if let Err(err) = run().await {
-        eprintln!("\x1b[31mait:\x1b[0m {err:#}");
+        eprintln!("\x1b[31mhey:\x1b[0m {err:#}");
         std::process::exit(1);
     }
 }
@@ -801,18 +834,27 @@ async fn run() -> Result<()> {
         ));
     }
 
-    let mut backend = if cli.claude {
-        Backend::Claude
+    let explicit = if cli.claude {
+        Some(Backend::Claude)
     } else if cli.codex {
-        Backend::Codex
+        Some(Backend::Codex)
     } else if let Some(b) = inline_backend {
-        b
+        if matches!(b, Backend::Auto) {
+            None
+        } else {
+            Some(b)
+        }
+    } else if !matches!(cli.backend, Backend::Auto) {
+        Some(cli.backend)
     } else {
-        cli.backend
+        None
     };
-    if matches!(backend, Backend::Auto) {
-        backend = resolve_auto_backend()?;
-    }
+
+    // Build the chain: explicit backend = single entry, auto = full available chain.
+    let chain: Vec<Backend> = match explicit {
+        Some(b) => vec![b],
+        None => resolve_auto_chain()?,
+    };
 
     let user_prompt = build_user_prompt(&request, cli.explain);
     let model = cli
@@ -820,18 +862,56 @@ async fn run() -> Result<()> {
         .clone()
         .unwrap_or_else(|| DEFAULT_MODEL.to_string());
 
-    print_thinking(backend, &model);
-    let raw = match backend {
-        Backend::Auto => unreachable!("resolved above"),
-        Backend::Openrouter => {
-            let api_key = env::var("OPENROUTER_API_KEY")
-                .context("OPENROUTER_API_KEY not set. Export it in your shell rc.")?;
-            ask_llm(&api_key, &model, &user_prompt).await?
+    // Try each backend in the chain. On error in auto-mode, surface a short
+    // fallback notice and try the next one. Any explicit backend just errors.
+    let mut raw_result: Option<String> = None;
+    let mut last_err: Option<anyhow::Error> = None;
+    let mut used_backend = chain[0];
+
+    for (i, candidate) in chain.iter().copied().enumerate() {
+        print_thinking(candidate, &model);
+        let attempt = match candidate {
+            Backend::Auto => unreachable!("auto resolved above"),
+            Backend::Openrouter => {
+                let api_key = env::var("OPENROUTER_API_KEY")
+                    .context("OPENROUTER_API_KEY not set. Export it in your shell rc.");
+                match api_key {
+                    Ok(key) => ask_llm(&key, &model, &user_prompt).await,
+                    Err(e) => Err(e),
+                }
+            }
+            Backend::Claude => ask_claude_code(&user_prompt),
+            Backend::Codex => ask_codex(&user_prompt),
+        };
+        clear_thinking();
+
+        match attempt {
+            Ok(r) => {
+                used_backend = candidate;
+                raw_result = Some(r);
+                break;
+            }
+            Err(e) => {
+                let is_last = i == chain.len() - 1;
+                if !is_last {
+                    let (_, color, name, _) = backend_persona(candidate);
+                    let (_, next_color, next_name, _) = backend_persona(chain[i + 1]);
+                    eprintln!(
+                        "  \x1b[90m╭─\x1b[0m \x1b[2;31m⚠\x1b[0m  {color}{name}\x1b[0m \x1b[2mfailed: {}\x1b[0m",
+                        e
+                    );
+                    eprintln!(
+                        "  \x1b[90m│\x1b[0m  \x1b[2mfalling back to\x1b[0m {next_color}{next_name}\x1b[0m…"
+                    );
+                }
+                last_err = Some(e);
+            }
         }
-        Backend::Claude => ask_claude_code(&user_prompt)?,
-        Backend::Codex => ask_codex(&user_prompt)?,
-    };
-    clear_thinking();
+    }
+
+    let raw =
+        raw_result.ok_or_else(|| last_err.unwrap_or_else(|| anyhow!("all backends failed")))?;
+    let backend = used_backend;
 
     let (mut command, explanation) = split_command_and_explanation(&raw);
     if command.is_empty() {
