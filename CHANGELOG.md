@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-04-16
+
+### Changed
+
+- **Claude backend fast-path** — when `ANTHROPIC_API_KEY` is set, `hey claude ...` calls the Anthropic Messages API directly via HTTP (~2s) instead of spawning `claude -p` (~6s). Falls back to the subprocess when no key is present.
+- **Code split into 12 modules** — `main.rs` went from 1056 lines to 224. Backend logic, risk gate, presets, sanitizer, UI, and style constants each live in their own file.
+- **ANSI constants extracted** — duplicated `\x1b[...` escape codes replaced with named constants in `src/style.rs` (`GRAY`, `RESET`, `DIM`, `BOLD_WHITE`, etc.).
+- **`which_bin()` now cached** — binary lookups (`eza`, `bat`, `jq`, `delta`, `claude`, `codex`) are scanned once at startup into a `OnceLock<HashMap>` instead of re-scanning PATH on every call.
+- **`prettify_command` inlined** — thin wrapper removed; callers use `apply_presets()` directly.
+- **Function-level `use` imports** moved to module scope.
+
 ## [0.2.1] - 2026-04-16
 
 ### Added
@@ -49,6 +60,7 @@ Initial release.
 - Fenced-code-block sanitizer so model responses with triple-backtick wrappers are parsed correctly
 - Strict prose detection — bail out if the backend returns non-command text
 
+[0.2.2]: https://github.com/subinium/hey-cli/releases/tag/v0.2.2
 [0.2.1]: https://github.com/subinium/hey-cli/releases/tag/v0.2.1
 [0.2.0]: https://github.com/subinium/hey-cli/releases/tag/v0.2.0
 [0.1.0]: https://github.com/subinium/hey-cli/releases/tag/v0.1.0
