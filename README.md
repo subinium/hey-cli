@@ -19,25 +19,104 @@ cargo install ai-in-terminal
 
 ---
 
-## 🎬 See it
+## See it in action
 
 ```
-$ hey find the 5 largest files in Downloads
+$ hey claude find the 5 largest files in Downloads
 
-  ╭─ hey · ✱ claude · headless
-  │
-  │  ✱  here you go
-  │
-  │  $ du -ah ~/Downloads | sort -rh | head -5
-  │
-  │  list everything under Downloads with sizes, sort descending, take top 5
-  │
-  ╰─❯  [Y]es  [n]o  [e]dit  › _
+  ✱ claude · headless
+
+   ▐▛███▜▌  here you go
+  ▝▜█████▛▘
+    ▘▘ ▝▝
+
+  $ du -ah ~/Downloads | sort -rh | head -5
+
+  list everything under Downloads with sizes, sort descending, take top 5
+
+  ▶ run? Y (default) / N
 ```
 
-Press **Enter** → it runs. **n** → abort. **e** → edit first.
+That's the whole workflow: **type → read → enter**.
 
-That's the whole workflow.
+---
+
+## Meet the crew
+
+Each backend has its own **character**, **color**, and **voice**.
+
+<table>
+<tr>
+<td align="center" width="33%">
+
+```
+   ▐▛███▜▌
+  ▝▜█████▛▘
+    ▘▘ ▝▝
+```
+
+**✱ Claude**
+
+*"here you go"*
+
+`claude -p` · your subscription
+
+</td>
+<td align="center" width="33%">
+
+```
+  ▄
+   ▀▄
+  ▄▀ ▄▄▄▄▄
+```
+
+**☁ Codex**
+
+*"computed"*
+
+`codex exec` · your subscription
+
+</td>
+<td align="center" width="33%">
+
+```
+    /\
+   <◆>
+    \/
+```
+
+**◆ OpenRouter**
+
+*"cooked"*
+
+HTTP API · `OPENROUTER_API_KEY`
+
+</td>
+</tr>
+</table>
+
+`hey` auto-detects: **claude → codex → openrouter**. Your subscription always comes first.
+
+---
+
+## 30-second tour
+
+```sh
+# just ask — hey picks the best available backend
+hey find all files over 100mb modified this week
+hey 최근 일주일 안에 수정된 파일 보여줘
+hey 100メガより大きいファイルを探して
+
+# or name your backend
+hey claude   explain this regex: \d{3}-\d{4}
+hey codex    summarize the last 10 commits
+hey openrouter kill the process on port 3000
+
+# flags go before the prompt
+hey -n  find files newer than a week     # dry-run
+hey -y  git branches merged into main    # auto-run
+hey -e  rename all .jpeg to .jpg         # with explanation
+```
 
 ---
 
@@ -49,21 +128,21 @@ That's the whole workflow.
 
 ### ⚡ Instant
 
-Sub-50ms cold start. ~2.7 MB binary. No config, no chat window, no project context to load. You type the intent, you get the command.
+Sub-50ms binary start. One sentence in, one command out. No chat session, no project context, no waiting for a UI to load.
 
 </td>
 <td width="33%" valign="top">
 
-### 🧠 Three brains
+### 💸 Subscription-first
 
-Speaks **Claude Code**, **Codex CLI**, and **OpenRouter** interchangeably. Each has its own icon, color, and voice. Pick one or let `hey` auto-route.
+Already pay for Claude Code or Codex? Use them inline — zero extra cost. OpenRouter is the fallback, not the default.
 
 </td>
 <td width="33%" valign="top">
 
 ### 🛡 Safe by default
 
-Hard-coded risk gate blocks `rm`, `dd`, `mkfs`, `find -delete`, even when they're hidden inside `sh -c`. Dangerous commands go to your clipboard, never your shell.
+`rm`, `dd`, `mkfs`, `find -delete` are **always blocked** — even wrapped in `sh -c`. Blocked commands go to your clipboard, never your shell.
 
 </td>
 </tr>
@@ -71,91 +150,19 @@ Hard-coded risk gate blocks `rm`, `dd`, `mkfs`, `find -delete`, even when they'r
 
 ---
 
-## 30-second tour
-
-```sh
-# ask in any language — pick a backend automatically
-hey find all files over 100mb modified this week
-hey 최근 일주일 안에 수정된 파일 보여줘
-hey 100メガより大きいファイルを探して
-
-# force a backend by name
-hey claude   explain this regex: \d{3}-\d{4}
-hey codex    summarize the last 10 commits
-hey openrouter kill the process on port 3000
-
-# shortcuts: or = openrouter
-hey or show disk usage by directory
-
-# flags go before the prompt
-hey -n   find files newer than a week    # dry-run, don't execute
-hey -y   git branches merged into main   # auto-run, no confirm
-hey -e   rename all .jpeg to .jpg        # with explanation
-hey --raw ls                              # skip the eza/bat rewriter
-```
-
----
-
-## Three voices, one CLI
-
-<table>
-<tr>
-<th>Backend</th><th>Icon</th><th>Voice</th><th>How it runs</th><th>Auth</th>
-</tr>
-<tr>
-<td><b>Claude Code</b></td>
-<td align="center"><code>✱</code></td>
-<td><i>"here you go"</i></td>
-<td><code>claude -p --system-prompt …</code></td>
-<td>your existing Claude Code login</td>
-</tr>
-<tr>
-<td><b>Codex CLI</b></td>
-<td align="center"><code>☁</code></td>
-<td><i>"computed"</i></td>
-<td><code>codex exec -o …</code></td>
-<td>your existing Codex login</td>
-</tr>
-<tr>
-<td><b>OpenRouter</b></td>
-<td align="center"><code>◆</code></td>
-<td><i>"cooked"</i></td>
-<td>HTTPS → <code>/v1/chat/completions</code></td>
-<td><code>OPENROUTER_API_KEY</code></td>
-</tr>
-</table>
-
-Each backend gets its own header:
-
-```
-  ╭─ hey · ✱ claude · headless         ← orange sparkle, "here you go"
-  ╭─ hey · ☁ codex · exec              ← sky-blue cloud, "computed"
-  ╭─ hey · ◆ openrouter · haiku-4.5    ← amber diamond, "cooked"
-```
-
-When a command is risky, the voice changes too: *"this one has a sharp edge"* or *"careful — you should run this one yourself"*.
-
----
-
 ## Install
 
-### From crates.io
+### From crates.io (recommended)
 
 ```sh
 cargo install ai-in-terminal
 ```
 
-After this runs, you can type `hey` anywhere in your terminal:
-
-```sh
-hey list the 5 largest files in Downloads
-```
-
-> **Why two names?** On crates.io the package is **`ai-in-terminal`** because it's a descriptive, searchable name. The binary it installs is **`hey`** because that's what you actually type. Cargo lets a crate publish any binary name it wants — no alias, no symlink, no extra steps. The binary lands at `~/.cargo/bin/hey`, so make sure `~/.cargo/bin` is on your `PATH`.
+> **Why two names?** The crate is `ai-in-terminal` (searchable), the binary is `hey` (what you type). Cargo handles this — no alias, no symlink.
 
 ### From pre-built binaries
 
-Grab a tarball for your platform from the [latest release](https://github.com/subinium/hey-cli/releases/latest):
+Grab from the [latest release](https://github.com/subinium/hey-cli/releases/latest):
 
 ```sh
 # macOS (Apple Silicon)
@@ -165,140 +172,112 @@ sudo mv hey /usr/local/bin/
 # macOS (Intel)
 curl -L https://github.com/subinium/hey-cli/releases/latest/download/hey-x86_64-apple-darwin.tar.gz | tar xz
 
-# Linux (x86_64)
+# Linux (x86_64 / aarch64)
 curl -L https://github.com/subinium/hey-cli/releases/latest/download/hey-x86_64-unknown-linux-gnu.tar.gz | tar xz
-
-# Linux (aarch64)
-curl -L https://github.com/subinium/hey-cli/releases/latest/download/hey-aarch64-unknown-linux-gnu.tar.gz | tar xz
-```
-
-### From source
-
-```sh
-git clone https://github.com/subinium/hey-cli
-cd hey-cli
-cargo install --path .
 ```
 
 ### First-time setup
 
-Pick whichever backend you already have — `hey` figures out the rest:
+Pick whichever backend you already have:
 
 ```sh
-# Option A — Claude Code (nothing to configure if you're already logged in)
-which claude
-
-# Option B — Codex CLI
-which codex
-
-# Option C — OpenRouter (fastest cold start)
-export OPENROUTER_API_KEY=sk-or-...
+which claude   # Option A — Claude Code (nothing to configure)
+which codex    # Option B — Codex CLI
+export OPENROUTER_API_KEY=sk-or-...  # Option C — OpenRouter
 ```
-
-If more than one is available, `hey` picks them in order: `claude → codex → openrouter`.
 
 ---
 
 ## Risk gate
 
-Some commands should never run through an AI-generated autopilot. `hey` has a hard-coded list — these are **always blocked**, even with `-y`:
+Some commands should **never** auto-run. `hey` hard-blocks these even with `-y`:
 
 ```
 rm · del · rmdir · shred · unlink
-find ... -delete · find ... -exec rm · xargs rm
-dd · mkfs · fdisk · wipefs · sfdisk · parted
-> /dev/sd*  ·  :(){ :|:& };:   ← fork bomb
-git reset --hard · git clean -fd
+find -delete · find -exec rm · xargs rm
+dd · mkfs · fdisk · wipefs · git reset --hard
 ```
 
-**The gate is substring-aware** — it catches `rm` hidden inside `sh -c 'rm ...'`, `find -exec sh -c 'rm "$1"'`, and similar wrappers. Blocked commands are **copied to your clipboard** so you can paste them yourself after you've decided they're safe.
+The gate unwraps `sh -c '...'` wrappers — `rm` hidden inside `find -exec sh -c 'rm "$1"'` is still caught.
 
 ```
-  ╭─ hey · ✱ claude · headless   BLOCKED
-  │
-  │  ✱  careful — you should run this one yourself
-  │
-  │  $ find . -name "*.log" -delete
-  │
-  │  removes all .log files recursively
-  │
-  │  ▲  `find -delete` removes files — copied to clipboard
-  │
-  ╰─
+  ✱ claude · headless   BLOCKED
+
+   ▐▛███▜▌  careful — you should run this one yourself
+  ▝▜█████▛▘
+    ▘▘ ▝▝
+
+  $ find . -name "*.log" -delete
+
+  ▲  `find -delete` removes files — copied to clipboard
+
   copied to clipboard · paste & run manually
 ```
 
-Soft warnings (runs, but shows a yellow `warn` chip): `sudo`, `cd`, `mv` without `-i`, `chmod`, `chown`, `>` (truncating redirect), `curl | sh`, `kill`/`killall`/`pkill`.
-
-> **This is not a safety net.** It's a tripwire for obvious foot-guns. You're still responsible for what you run.
+Soft warnings (yellow `warn` chip, still runs): `sudo`, `mv`, `chmod`, `curl | sh`, `kill`.
 
 ---
 
 ## Pretty by default
 
-When the model picks a common tool, `hey` transparently swaps in its modern replacement — but only when there's zero risk of flag mismatches:
+`hey` swaps bare commands for modern alternatives when installed:
 
-<table>
-<tr><th>Model says</th><th>hey runs</th><th>When</th></tr>
-<tr><td><code>ls</code> (no flags)</td><td><code>eza --icons --color=always --git --long --header</code></td><td><code>eza</code> installed</td></tr>
-<tr><td><code>tree</code> (no flags)</td><td><code>eza --tree --icons --color=always</code></td><td><code>eza</code> installed</td></tr>
-<tr><td><code>tree</code> (fallback)</td><td><code>tree -C</code></td><td>always</td></tr>
-<tr><td><code>cat foo.json</code></td><td><code>jq --color-output . foo.json</code></td><td><code>jq</code> installed</td></tr>
-<tr><td><code>cat foo</code></td><td><code>bat --color=always --style=numbers --paging=never foo</code></td><td><code>bat</code> installed</td></tr>
-<tr><td><code>grep</code></td><td><code>grep --color=always</code></td><td>no <code>--color</code> set</td></tr>
-<tr><td><code>diff</code></td><td><code>diff … | delta</code></td><td><code>delta</code> installed</td></tr>
-</table>
+| Model says | `hey` runs | When |
+|---|---|---|
+| `ls` | `eza --icons --color=always --git` | `eza` installed, no flags |
+| `tree` | `eza --tree --icons --color=always` | `eza` installed, no flags |
+| `cat foo.json` | `jq --color-output . foo.json` | `jq` installed |
+| `cat foo` | `bat --color=always --paging=never foo` | `bat` installed |
+| `grep` | `grep --color=always` | no `--color` set |
+| `diff` | `diff … \| delta` | `delta` installed |
 
-Anything with flags passes through untouched. Bare `ls` without `eza` still gets BSD color via `CLICOLOR_FORCE=1`. Use `--raw` to disable all rewrites per-invocation.
+Commands with flags pass through untouched. Use `--raw` to disable all rewrites.
 
 ---
 
-## Flags & env
+## Security
+
+- **Content filter** blocks prompts containing API keys (`sk-ant-`, `AKIA`, `ghp_`, etc.) and private key headers before they reach any backend.
+- **Risk gate** is substring-aware — catches destructive commands even inside shell wrappers.
+- **Tools disabled** in Claude backend — `--disallowedTools` strips all filesystem access; the model can only return text.
+- **No telemetry**, no analytics, no data collection. Your prompts go to the backend you chose and nowhere else.
+
+Override the content filter with `--allow-sensitive` when you genuinely need to reference a key pattern.
+
+---
 
 <details>
-<summary><b>All flags</b></summary>
+<summary><b>All flags & env vars</b></summary>
+
+### Flags
 
 | Flag | Description |
 |---|---|
-| `-y`, `--yes` | Skip the confirm prompt, run immediately (blocked commands still blocked) |
+| `-y`, `--yes` | Skip confirm, run immediately (blocked commands still blocked) |
 | `-n`, `--dry-run` | Print the command, don't run it |
-| `-e`, `--explain` | Force the model to add a one-line explanation (pipes get one automatically) |
+| `-e`, `--explain` | Force a one-line explanation |
 | `-c`, `--claude` | Force Claude Code backend |
 | `-x`, `--codex` | Force Codex CLI backend |
-| `-b`, `--backend <name>` | `auto` (default) / `claude` / `codex` / `openrouter` |
+| `-b`, `--backend <name>` | `auto` / `claude` / `codex` / `openrouter` |
 | `-m`, `--model <id>` | Override model (OpenRouter only) |
-| `--raw` | Disable the eza/bat/tree prettifier |
+| `--raw` | Disable eza/bat/tree prettifier |
+| `--allow-sensitive` | Allow prompts with API key patterns |
 
-> Flags must come **before** the prompt / backend name: `hey -n claude list files`, not `hey claude -n list files`.
+> Flags go **before** the prompt: `hey -n claude list files`
+
+### Environment variables
+
+| Var | Effect |
+|---|---|
+| `OPENROUTER_API_KEY` | Enables OpenRouter backend |
+| `ANTHROPIC_API_KEY` | Enables direct Anthropic API (~2s vs ~6s for Claude) |
+| `AIT_BACKEND` | Default backend |
+| `AIT_MODEL` | Default OpenRouter model id |
 
 </details>
 
 <details>
-<summary><b>Environment variables</b></summary>
-
-| Var | Effect |
-|---|---|
-| `OPENROUTER_API_KEY` | Enables the OpenRouter backend |
-| `AIT_BACKEND` | Default backend (`auto` / `claude` / `codex` / `openrouter`) |
-| `AIT_MODEL` | Default OpenRouter model id (e.g. `anthropic/claude-haiku-4.5`) |
-
-No config file. Everything is flags + env.
-
-</details>
-
----
-
-## Power-user tricks
-
-**Bind a key in zsh** to drop `hey ` at the cursor:
-
-```zsh
-bindkey -s '^G' 'hey '
-```
-
-Now `Ctrl-G` → `hey ` → type your question → Enter → done.
-
-**Recipe book:**
+<summary><b>Recipe book</b></summary>
 
 ```sh
 hey find files newer than a week, sort by size
@@ -308,27 +287,32 @@ hey convert all .png in ~/Pictures to jpg, keep originals
 hey kill everything listening on port 5173
 hey or show git log for the last month by myself
 hey -y git branches merged into main
+hey 이 폴더에서 가장 큰 파일 5개 찾아줘
+hey このディレクトリのRustファイルの行数を数えて
 ```
 
----
+</details>
 
-## How it stays small
+<details>
+<summary><b>How it stays small</b></summary>
 
-- **Rust**, single `src/main.rs`, ~800 lines. No plugin system, no TOML config, no lifecycle hooks.
-- **Backends are subprocesses** for Claude & Codex — zero extra auth plumbing. If `claude` works in your shell, it works in `hey`.
-- **Claude backend runs with all tools disabled** (`--disallowedTools Bash,Edit,Write,Read,...`) and a *replaced* system prompt, so it can only return text. No filesystem access, no tool use, no session state — just pure synth.
-- **Risk gate is a hard block**, not a prompt. Destructive commands cannot be `-y`'d into execution.
-- **Conservative rewrites**: only bare commands get prettified; anything with flags passes through.
+- **Rust**, 12 modules, ~1000 lines total. No plugin system, no TOML config, no lifecycle hooks.
+- **Backends are subprocesses** for Claude & Codex — if `claude` works in your shell, it works in `hey`.
+- **Direct Anthropic API** when `ANTHROPIC_API_KEY` is set — skips the `claude` subprocess for ~2s response time.
+- **Auto-fallback chain** — if a backend fails (rate limit, auth), `hey` transparently retries the next one.
+- **Conservative rewrites** — only bare commands get prettified; anything with flags passes through.
+
+</details>
 
 ---
 
 ## Roadmap
 
-- [ ] History / recall — `hey --last`, `hey --retry`
-- [ ] Shell function wrapper so `cd`/`export`/`source` can actually change the parent shell
-- [ ] Per-directory `.heyrc` for project-specific system prompt additions
+- [ ] `hey --last` / `hey --retry` — command history & recall
+- [ ] `hey init zsh` — shell function so `cd`/`export` work in the parent shell
+- [ ] Per-directory `.heyrc` for project-specific prompts
+- [ ] `hey doctor` — diagnose backends, tools, auth
 - [ ] Streaming output
-- [ ] Community risk-rule contributions
 - [ ] Homebrew tap
 
 PRs welcome — keep them small.
@@ -337,8 +321,8 @@ PRs welcome — keep them small.
 
 <div align="center">
 
-**MIT** · built in an afternoon · `hey` has no affiliation with Anthropic, OpenAI, or OpenRouter
+**MIT** · built by [@subinium](https://github.com/subinium) · `hey` is not affiliated with Anthropic, OpenAI, or OpenRouter
 
-<sub>The crate is <code>ai-in-terminal</code> on crates.io; <code>hey</code> started as the acronym <code>ait</code> (<i>agent in terminal</i>)</sub>
+<sub>The crate is <code>ai-in-terminal</code>; <code>hey</code> started as <code>ait</code> (<i>agent in terminal</i>)</sub>
 
 </div>
