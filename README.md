@@ -2,9 +2,9 @@
 
 # `hey`
 
-### talk to your terminal in plain English
+### talk to your terminal in natural language
 
-*one binary · three backends · zero config*
+*works in English, Korean, Japanese, or whatever you type · one binary · three backends · zero config*
 
 [![crates.io](https://img.shields.io/crates/v/ai-in-terminal.svg?style=for-the-badge&logo=rust&color=orange)](https://crates.io/crates/ai-in-terminal)
 [![downloads](https://img.shields.io/crates/d/ai-in-terminal.svg?style=for-the-badge&color=green)](https://crates.io/crates/ai-in-terminal)
@@ -74,8 +74,10 @@ Hard-coded risk gate blocks `rm`, `dd`, `mkfs`, `find -delete`, even when they'r
 ## 30-second tour
 
 ```sh
-# ask in plain English — pick a backend automatically
+# ask in any language — pick a backend automatically
 hey find all files over 100mb modified this week
+hey 최근 일주일 안에 수정된 파일 보여줘
+hey 100メガより大きいファイルを探して
 
 # force a backend by name
 hey claude   explain this regex: \d{3}-\d{4}
@@ -143,7 +145,13 @@ When a command is risky, the voice changes too: *"this one has a sharp edge"* or
 cargo install ai-in-terminal
 ```
 
-The crate is `ai-in-terminal`; the installed binary is **`hey`**.
+After this runs, you can type `hey` anywhere in your terminal:
+
+```sh
+hey list the 5 largest files in Downloads
+```
+
+> **Why two names?** On crates.io the package is **`ai-in-terminal`** because it's a descriptive, searchable name. The binary it installs is **`hey`** because that's what you actually type. Cargo lets a crate publish any binary name it wants — no alias, no symlink, no extra steps. The binary lands at `~/.cargo/bin/hey`, so make sure `~/.cargo/bin` is on your `PATH`.
 
 ### From pre-built binaries
 
