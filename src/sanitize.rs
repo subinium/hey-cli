@@ -1,4 +1,50 @@
+/// Strips ANSI escape sequences from text. Used to neutralize terminal-escape
+/// injection attacks (OSC 52 clipboard overwrite, CSI cursor moves, SGR dumps)
+/// from anything that originated at a model or network endpoint before we
+/// display it to the user.
+pub(crate) fn strip_ansi(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            match chars.next() {
+                // CSI: ESC [ ... <letter>
+                Some('[') => {
+                    for c2 in chars.by_ref() {
+                        if c2.is_ascii_alphabetic() || c2 == '~' {
+                            break;
+                        }
+                    }
+                }
+                // OSC: ESC ] ... BEL | ESC \
+                Some(']') => {
+                    let mut last_was_esc = false;
+                    for c2 in chars.by_ref() {
+                        if c2 == '\x07' {
+                            break;
+                        }
+                        if last_was_esc && c2 == '\\' {
+                            break;
+                        }
+                        last_was_esc = c2 == '\x1b';
+                    }
+                }
+                // Two-char escapes (ESC ( B, etc.) — skip one more char.
+                Some(_) => {}
+                None => {}
+            }
+        } else if c == '\x07' || c == '\x08' {
+            // Bell and backspace — strip.
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 pub(crate) fn sanitize_command(raw: &str) -> String {
+    let raw = strip_ansi(raw);
+    let raw = raw.as_str();
     let trimmed = raw.trim();
 
     // If the model wrapped the command in a fenced block anywhere in the output,

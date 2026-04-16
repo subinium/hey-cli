@@ -76,25 +76,59 @@ pub(crate) fn print_command_block(
     }
 }
 
-pub(crate) fn confirm(command: &str) -> anyhow::Result<Decision> {
+pub(crate) fn confirm(command: &str, risk: Risk) -> anyhow::Result<Decision> {
     let stdin = io::stdin();
+    let warn = matches!(risk, Risk::Warn);
     loop {
         println!();
-        print!("  {BOLD_GREEN}▶{RESET} run? {BOLD_GREEN}Y{RESET} {DIM}(default){RESET} / {DIM}N{RESET} ");
+        if warn {
+            // Warn: explicit `y` required, Enter defaults to abort.
+            print!(
+                "  {BOLD_YELLOW}▶{RESET} run? {DIM}y{RESET} / {BOLD_YELLOW}N{RESET} {DIM}(default){RESET} "
+            );
+        } else {
+            print!(
+                "  {BOLD_GREEN}▶{RESET} run? {BOLD_GREEN}Y{RESET} {DIM}(default){RESET} / {DIM}N{RESET} "
+            );
+        }
         io::stdout().flush().ok();
+
         let mut line = String::new();
-        stdin.lock().read_line(&mut line)?;
+        let n = stdin.lock().read_line(&mut line)?;
+        // EOF (Ctrl-D or closed stdin): read_line returns Ok(0) without writing to `line`.
+        if n == 0 {
+            println!();
+            println!("  {GRAY}╰─{RESET} {GRAY}aborted (no input){RESET}");
+            println!();
+            return Ok(Decision::Abort);
+        }
         let ans = line.trim().to_lowercase();
         match ans.as_str() {
-            "" | "y" | "yes" => {
+            "" => {
+                if warn {
+                    // Blank Enter on warn: treat as No.
+                    return Ok(Decision::Abort);
+                }
+                println!();
+                return Ok(Decision::Run(command.to_string()));
+            }
+            "y" | "yes" => {
                 println!();
                 return Ok(Decision::Run(command.to_string()));
             }
             "n" | "no" => return Ok(Decision::Abort),
             "e" | "edit" => {
-                copy_to_clipboard(command);
+                let copied = copy_to_clipboard(command);
                 println!();
-                println!("  {DIM}copied to clipboard — paste in your shell to edit & run{RESET}");
+                if copied {
+                    println!(
+                        "  {DIM}copied to clipboard — paste in your shell to edit & run{RESET}"
+                    );
+                } else {
+                    println!(
+                        "  {DIM}could not copy to clipboard (install pbcopy/xclip/wl-copy){RESET}"
+                    );
+                }
                 println!();
                 return Ok(Decision::Abort);
             }
@@ -170,12 +204,15 @@ pub(crate) fn clear_thinking() {
     for _ in 0..lines {
         eprint!("\r\x1b[K\x1b[1A");
     }
-    eprint!("\r\x1b[K");
+    // Erase from cursor to end of screen — catches wrapped lines on narrow terminals.
+    eprint!("\r\x1b[J");
     show_cursor();
     io::stderr().flush().ok();
 }
 
-pub(crate) fn copy_to_clipboard(text: &str) {
+/// Copies `text` to the system clipboard. Returns true on success, false if no
+/// backend was available or the copy failed.
+pub(crate) fn copy_to_clipboard(text: &str) -> bool {
     let bin = if cfg!(target_os = "macos") {
         "pbcopy"
     } else if which_bin("wl-copy") {
@@ -183,17 +220,26 @@ pub(crate) fn copy_to_clipboard(text: &str) {
     } else if which_bin("xclip") {
         "xclip"
     } else {
-        return;
+        return false;
     };
-    if let Ok(mut child) = Command::new(bin)
+    let mut child = match Command::new(bin)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
     {
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(text.as_bytes());
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    if let Some(mut stdin) = child.stdin.take() {
+        if stdin.write_all(text.as_bytes()).is_err() {
+            // Still wait so we don't leak the child process.
+            let _ = child.wait();
+            return false;
         }
-        let _ = child.wait();
+    }
+    match child.wait() {
+        Ok(status) => status.success(),
+        Err(_) => false,
     }
 }

@@ -1,5 +1,7 @@
 mod backend;
 mod cli;
+mod completions;
+mod doctor;
 mod preset;
 mod prompt;
 mod risk;
@@ -10,12 +12,13 @@ mod ui;
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use std::env;
+use std::io::{self, IsTerminal, Read};
 use std::process::{Command, Stdio};
 
 use backend::claude::ask_claude;
 use backend::codex::ask_codex;
 use backend::openrouter::{ask_openrouter, DEFAULT_MODEL};
-use backend::{backend_persona, resolve_auto_chain};
+use backend::{backend_persona, resolve_auto_chain, which_bin};
 use cli::{Backend, Cli};
 use preset::apply_presets;
 use prompt::build_user_prompt;
@@ -49,23 +52,75 @@ fn ctrlc_show_cursor() {
 async fn run() -> Result<()> {
     let cli = Cli::parse();
 
-    // Subcommand-style backend selection: `hey claude ...`, `hey codex ...`, `hey openrouter ...`
+    // Subcommand-style dispatch on the first positional word.
+    // Supported: `doctor`, `init <shell>` — these must be exact lowercase and
+    // are checked BEFORE backend parsing so `hey doctor` / `hey init zsh` work
+    // without any flags.
+    if let Some(first) = cli.prompt.first() {
+        match first.as_str() {
+            "doctor" => return doctor::run(),
+            "init" => {
+                let shell = cli.prompt.get(1).map(|s| s.as_str());
+                return completions::run(shell);
+            }
+            _ => {}
+        }
+    }
+
+    // Subcommand-style backend selection: `hey claude ...`, `hey codex ...`, `hey openrouter ...`.
+    // Case-sensitive so `hey Claude is fast` doesn't consume `Claude`. Also drop
+    // the `or` alias — too ambiguous with the English preposition.
     let mut prompt_words = cli.prompt.clone();
-    let inline_backend = match prompt_words.first().map(|s| s.to_lowercase()) {
-        Some(ref w) if w == "claude" => Some(Backend::Claude),
-        Some(ref w) if w == "codex" => Some(Backend::Codex),
-        Some(ref w) if w == "openrouter" || w == "or" => Some(Backend::Openrouter),
-        Some(ref w) if w == "auto" => Some(Backend::Auto),
+    let inline_backend = match prompt_words.first().map(String::as_str) {
+        Some("claude") => Some(Backend::Claude),
+        Some("codex") => Some(Backend::Codex),
+        Some("openrouter") => Some(Backend::Openrouter),
+        Some("auto") => Some(Backend::Auto),
         _ => None,
     };
     if inline_backend.is_some() {
         prompt_words.remove(0);
     }
 
-    let request = prompt_words.join(" ");
+    // Resolve the prompt text. Precedence:
+    //   1. If we have positional words after backend stripping, use them.
+    //   2. Else, if stdin is a pipe (not a TTY), read the prompt from stdin.
+    //   3. Else, error with a helpful message.
+    // When stdin was consumed for the prompt, confirm() would block on nothing
+    // readable — require --yes or --dry-run in that case.
+    let stdin_was_piped = !io::stdin().is_terminal();
+    let have_positional = !prompt_words.is_empty();
+    let request = if have_positional {
+        prompt_words.join(" ")
+    } else if stdin_was_piped {
+        let mut buf = String::new();
+        io::stdin()
+            .read_to_string(&mut buf)
+            .context("failed to read prompt from stdin")?;
+        buf.trim().to_string()
+    } else {
+        String::new()
+    };
+
     if request.trim().is_empty() {
         return Err(anyhow!(
-            "empty prompt — try `hey find files bigger than 100mb` or `hey claude explain this regex`"
+            "empty prompt — try `hey find files bigger than 100mb`, `hey claude explain this regex`, or pipe: `echo 'list docker containers' | hey --yes`"
+        ));
+    }
+
+    // If the prompt came from stdin, confirm() can't read a y/N answer — require
+    // an explicit non-interactive mode.
+    if stdin_was_piped && !have_positional && !cli.yes && !cli.dry_run {
+        return Err(anyhow!(
+            "prompt was read from stdin, but stdin is needed for confirmation — pass --yes to auto-run or --dry-run to just print"
+        ));
+    }
+
+    // Refuse to run when we have nowhere sensible to print the command. Skipping
+    // this silently caused hangs on `hey foo | head`.
+    if !io::stdout().is_terminal() && !cli.yes && !cli.dry_run {
+        return Err(anyhow!(
+            "stdout is not a terminal — pass --yes to auto-run or --dry-run to just print"
         ));
     }
 
@@ -99,7 +154,7 @@ async fn run() -> Result<()> {
     // Build the chain: explicit backend = single entry, auto = full available chain.
     let chain: Vec<Backend> = match explicit {
         Some(b) => vec![b],
-        None => resolve_auto_chain()?,
+        None => resolve_auto_chain().map_err(|_| no_backend_error())?,
     };
 
     let user_prompt = build_user_prompt(&request, cli.explain);
@@ -119,8 +174,11 @@ async fn run() -> Result<()> {
         let attempt = match candidate {
             Backend::Auto => unreachable!("auto resolved above"),
             Backend::Openrouter => {
-                let api_key = env::var("OPENROUTER_API_KEY")
-                    .context("OPENROUTER_API_KEY not set. Export it in your shell rc.");
+                let api_key = env::var("OPENROUTER_API_KEY").map_err(|_| {
+                    anyhow!(
+                        "OPENROUTER_API_KEY not set. Get one at https://openrouter.ai/keys, then: export OPENROUTER_API_KEY=sk-or-v1-..."
+                    )
+                });
                 match api_key {
                     Ok(key) => ask_openrouter(&key, &model, &user_prompt).await,
                     Err(e) => Err(e),
@@ -165,9 +223,9 @@ async fn run() -> Result<()> {
     }
     let first_line = command.lines().next().unwrap_or("");
     if !looks_like_command(first_line) {
+        let preview = truncate_prose(&command, 200);
         return Err(anyhow!(
-            "backend returned prose instead of a command:\n\n{}\n\nTry a different backend with `hey claude ...` / `hey codex ...` / `hey openrouter ...`.",
-            command
+            "backend returned prose instead of a command:\n\n{preview}\n\nTry a different backend with `hey claude ...` / `hey codex ...` / `hey openrouter ...`."
         ));
     }
     if !cli.raw {
@@ -191,9 +249,19 @@ async fn run() -> Result<()> {
         return Ok(());
     }
     if blocked {
-        // Destructive commands: print + copy to clipboard (macOS), never auto-execute.
-        copy_to_clipboard(&command);
-        println!("  {DIM_GRAY}copied to clipboard · paste & run manually{RESET}");
+        // Destructive commands: print + copy to clipboard, never auto-execute.
+        // Report accurately whether the clipboard copy succeeded.
+        if copy_to_clipboard(&command) {
+            println!("  {DIM_GRAY}copied to clipboard · paste & run manually{RESET}");
+        } else {
+            println!(
+                "  {DIM_GRAY}could not copy to clipboard (install pbcopy/xclip/wl-copy) — copy manually:{RESET}"
+            );
+            println!();
+            for line in command.lines() {
+                println!("  {BOLD_WHITE}{line}{RESET}");
+            }
+        }
         println!();
         return Ok(());
     }
@@ -201,7 +269,7 @@ async fn run() -> Result<()> {
     let to_run = if cli.yes {
         command
     } else {
-        match confirm(&command)? {
+        match confirm(&command, risk)? {
             Decision::Run(c) => c,
             Decision::Abort => {
                 println!("  {GRAY}╰─{RESET} {GRAY}aborted{RESET}");
@@ -216,6 +284,48 @@ async fn run() -> Result<()> {
         std::process::exit(code);
     }
     Ok(())
+}
+
+/// Build a helpful error for the `no backend available` case, tailored to what
+/// the user actually has on disk and in env-vars.
+fn no_backend_error() -> anyhow::Error {
+    let mut lines = vec!["no backend available.".to_string()];
+    let has_claude = which_bin("claude");
+    let has_codex = which_bin("codex");
+    let has_or_key = env::var("OPENROUTER_API_KEY")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .is_some();
+
+    if !has_claude {
+        lines.push(
+            "  1) install Claude Code (https://docs.anthropic.com/claude/docs/claude-code) and run `claude login`".into(),
+        );
+    }
+    if !has_codex {
+        lines.push("  2) install the Codex CLI and run `codex login`".into());
+    }
+    if !has_or_key {
+        lines.push(
+            "  3) set OPENROUTER_API_KEY — get a key at https://openrouter.ai/keys, then `export OPENROUTER_API_KEY=sk-or-v1-...`"
+                .into(),
+        );
+    }
+    if has_claude || has_codex || has_or_key {
+        lines.push("  run `hey doctor` for a full diagnostic.".into());
+    }
+    anyhow!("{}", lines.join("\n"))
+}
+
+/// Truncate prose to `max` chars with an ellipsis suffix. Used to keep the
+/// "backend returned prose instead of a command" error from dumping kilobytes.
+fn truncate_prose(s: &str, max: usize) -> String {
+    let s = s.trim();
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let cut: String = s.chars().take(max).collect();
+    format!("{cut}\u{2026}")
 }
 
 fn run_command(command: &str) -> Result<i32> {

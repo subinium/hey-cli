@@ -1,6 +1,6 @@
 [package]
 name = "ai-in-terminal"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "hey — natural language to shell commands, with personality. Speaks Claude, Codex, and OpenRouter."
 license = "MIT"
@@ -17,12 +17,14 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive", "env"] }
+clap_complete = "4"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt", "macros", "io-util", "process"] }
 anyhow = "1"
 ctrlc = "3"
+tempfile = "3"
 
 [profile.release]
 lto = "thin"
