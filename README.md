@@ -43,42 +43,15 @@ That's the whole workflow: **type → read → enter**.
 
 ## Meet the crew
 
-Each backend has its own **character**, **color**, and **voice**.
+Each backend has its own icon, voice, and personality in your terminal.
 
-<table>
-<tr>
-<td align="center" width="33%">
-<pre>
- ▐▛███▜▌
-▝▜█████▛▘
-  ▘▘ ▝▝
-</pre>
-<b>✱ Claude</b><br>
-<i>"here you go"</i><br>
-<code>claude -p</code> · your subscription
-</td>
-<td align="center" width="33%">
-<pre>
-▄
- ▀▄
-▄▀ ▄▄▄▄▄
-</pre>
-<b>☁ Codex</b><br>
-<i>"computed"</i><br>
-<code>codex exec</code> · your subscription
-</td>
-<td align="center" width="33%">
-<pre>
-  /\
- &lt;◆&gt;
-  \/
-</pre>
-<b>◆ OpenRouter</b><br>
-<i>"cooked"</i><br>
-HTTP API · <code>OPENROUTER_API_KEY</code>
-</td>
-</tr>
-</table>
+| | Backend | Voice | How it connects | Auth |
+|---|---|---|---|---|
+| **✱** | **Claude** | *"here you go"* | `claude -p` or direct API | your Claude subscription |
+| **☁** | **Codex** | *"computed"* | `codex exec` | your Codex subscription |
+| **◆** | **OpenRouter** | *"cooked"* | HTTP API | `OPENROUTER_API_KEY` |
+
+> In your terminal, each backend shows its own ASCII art mascot — Claude's sparkle, Codex's arrow, OpenRouter's diamond.
 
 `hey` auto-detects: **claude → codex → openrouter**. Your subscription always comes first.
 
