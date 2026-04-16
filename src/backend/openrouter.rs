@@ -35,7 +35,11 @@ struct ChoiceMessage {
     content: String,
 }
 
-pub(crate) async fn ask_openrouter(api_key: &str, model: &str, user_prompt: &str) -> Result<String> {
+pub(crate) async fn ask_openrouter(
+    api_key: &str,
+    model: &str,
+    user_prompt: &str,
+) -> Result<String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()?;

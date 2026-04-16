@@ -46,14 +46,16 @@ fn scan_path(bin: &str) -> bool {
 /// Pre-populate the which_bin cache at startup for all binaries we ever query.
 /// Call this once from main before any other logic.
 pub(crate) fn init_bin_cache() {
-    let bins = ["eza", "bat", "jq", "delta", "claude", "codex", "wl-copy", "xclip"];
+    let bins = [
+        "eza", "bat", "jq", "delta", "claude", "codex", "wl-copy", "xclip",
+    ];
     let mut map = HashMap::with_capacity(bins.len());
     if let Ok(path) = env::var("PATH") {
         let dirs: Vec<&str> = path.split(':').collect();
         for &bin in &bins {
-            let found = dirs.iter().any(|dir| {
-                std::path::Path::new(dir).join(bin).is_file()
-            });
+            let found = dirs
+                .iter()
+                .any(|dir| std::path::Path::new(dir).join(bin).is_file());
             map.insert(bin.to_string(), found);
         }
     } else {
@@ -65,7 +67,9 @@ pub(crate) fn init_bin_cache() {
 }
 
 /// (icon, ansi_color, display_name, voice_line)
-pub(crate) fn backend_persona(backend: Backend) -> (&'static str, &'static str, &'static str, &'static str) {
+pub(crate) fn backend_persona(
+    backend: Backend,
+) -> (&'static str, &'static str, &'static str, &'static str) {
     match backend {
         Backend::Claude => ("✱", "\x1b[38;5;215m", "claude", "here you go"),
         Backend::Codex => ("☁", "\x1b[38;5;111m", "codex", "computed"),
@@ -88,25 +92,13 @@ pub(crate) fn backend_label(backend: Backend, model: &str) -> String {
     format!("{color}{icon}{RESET} {BOLD_WHITE_BG}{name}{RESET}{tail}")
 }
 
-/// Small ASCII art mascot per backend. Returns 3 lines of art text (uncolored).
-pub(crate) fn backend_art(backend: Backend) -> [&'static str; 3] {
+/// ASCII art mascot per backend. Claude and Codex use their official terminal logos.
+pub(crate) fn backend_art(backend: Backend) -> &'static [&'static str] {
     match backend {
-        Backend::Claude => [
-            "▐▛█▜▌",
-            "▝▜██▛▘",
-            "  ▘▝ ",
-        ],
-        Backend::Codex => [
-            " ▗▄▄▖ ",
-            "▐████▌",
-            " ▝▀▀▘ ",
-        ],
-        Backend::Openrouter => [
-            " ▗▄▖",
-            " ▐◆▌",
-            " ▝▀▘",
-        ],
-        Backend::Auto => ["", "", ""],
+        Backend::Claude => &[" ▐▛███▜▌", "▝▜█████▛▘", "  ▘▘ ▝▝"],
+        Backend::Codex => &["▄         ", " ▀▄       ", "▄▀ ▄▄▄▄▄  "],
+        Backend::Openrouter => &[r"  /\", r" <◆>", r"  \/"],
+        Backend::Auto => &[],
     }
 }
 

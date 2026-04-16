@@ -22,15 +22,28 @@ use prompt::build_user_prompt;
 use risk::{assess_risk, check_sensitive, Risk};
 use sanitize::{looks_like_command, split_command_and_explanation};
 use style::*;
-use ui::{clear_thinking, confirm, copy_to_clipboard, print_command_block, print_thinking, Decision};
+use ui::{
+    clear_thinking, confirm, copy_to_clipboard, print_command_block, print_thinking, Decision,
+};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    // Ensure cursor is always restored, even on panic or Ctrl-C.
+    ctrlc_show_cursor();
     backend::init_bin_cache();
     if let Err(err) = run().await {
+        ui::show_cursor();
         eprintln!("{RED}hey:{RESET} {err:#}");
         std::process::exit(1);
     }
+}
+
+fn ctrlc_show_cursor() {
+    let _ = ctrlc::set_handler(|| {
+        // Best-effort cursor restore before exit.
+        eprint!("\x1b[?25h");
+        std::process::exit(130);
+    });
 }
 
 async fn run() -> Result<()> {

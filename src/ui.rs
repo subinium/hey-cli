@@ -21,15 +21,16 @@ pub(crate) fn print_command_block(
     closed: bool,
 ) {
     let label = backend_label(backend, model);
-    let (icon, color, _name, voice) = backend_persona(backend);
+    let (_, color, _, voice) = backend_persona(backend);
     let risk_chip = match risk {
         Risk::Safe => String::new(),
         Risk::Warn => format!("  {BG_YELLOW_BLACK} warn {RESET}"),
         Risk::Block => format!("  {BG_RED_WHITE} BLOCKED {RESET}"),
     };
+
+    println!("\n  {label}{risk_chip}");
     println!();
-    println!("  {GRAY}╭─{RESET} {BOLD_CYAN}hey{RESET} {GRAY}·{RESET} {label}{risk_chip}");
-    println!("  {GRAY}│{RESET}");
+
     if !voice.is_empty() {
         let quip = match risk {
             Risk::Block => "careful — you should run this one yourself",
@@ -37,27 +38,28 @@ pub(crate) fn print_command_block(
             Risk::Safe => voice,
         };
         let art = backend_art(backend);
-        if art[0].is_empty() {
-            // No art (Auto backend) — single line with icon
-            println!("  {GRAY}│{RESET}  {color}{icon}{RESET}  {DIM_ITALIC}{quip}{RESET}");
+        if art.is_empty() {
+            println!("  {DIM_ITALIC}{quip}{RESET}");
         } else {
-            // Art + voice on first line, remaining art lines below
-            println!("  {GRAY}│{RESET}  {color}{}{RESET}  {DIM_ITALIC}{quip}{RESET}", art[0]);
-            println!("  {GRAY}│{RESET}  {color}{}{RESET}", art[1]);
-            println!("  {GRAY}│{RESET}  {color}{}{RESET}", art[2]);
+            println!("  {color}{}{RESET}  {DIM_ITALIC}{quip}{RESET}", art[0]);
+            for line in &art[1..] {
+                println!("  {color}{line}{RESET}");
+            }
         }
-        println!("  {GRAY}│{RESET}");
+        println!();
     }
+
     for (i, line) in command.lines().enumerate() {
         if i == 0 {
-            println!("  {GRAY}│{RESET}  {DIM}${RESET} {BOLD_WHITE}{line}{RESET}");
+            println!("  {DIM}${RESET} {BOLD_WHITE}{line}{RESET}");
         } else {
-            println!("  {GRAY}│{RESET}    {BOLD_WHITE}{line}{RESET}");
+            println!("    {BOLD_WHITE}{line}{RESET}");
         }
     }
+
     if let Some(expl) = explanation {
-        println!("  {GRAY}│{RESET}");
-        println!("  {GRAY}│{RESET}  {DIM_ITALIC}{expl}{RESET}");
+        println!();
+        println!("  {DIM_ITALIC}{expl}{RESET}");
     }
     if let Some(note) = risk_note {
         let rcolor = match risk {
@@ -65,12 +67,11 @@ pub(crate) fn print_command_block(
             Risk::Warn => BOLD_YELLOW,
             Risk::Safe => DIM,
         };
-        println!("  {GRAY}│{RESET}");
-        println!("  {GRAY}│{RESET}  {rcolor}▲{RESET}  {DIM_ITALIC}{note}{RESET}");
+        println!();
+        println!("  {rcolor}▲{RESET}  {DIM_ITALIC}{note}{RESET}");
     }
-    println!("  {GRAY}│{RESET}");
+
     if closed {
-        println!("  {GRAY}╰─{RESET}");
         println!();
     }
 }
@@ -78,9 +79,8 @@ pub(crate) fn print_command_block(
 pub(crate) fn confirm(command: &str) -> anyhow::Result<Decision> {
     let stdin = io::stdin();
     loop {
-        print!(
-            "  {GRAY}╰─{RESET}{MAGENTA}❯{RESET}  {DIM}[{RESET}{BOLD_GREEN}Y{RESET}{DIM}]es{RESET}  {DIM}[{RESET}{BOLD_RED}n{RESET}{DIM}]o{RESET}  {DIM}[{RESET}{BOLD_YELLOW}e{RESET}{DIM}]dit{RESET}  {GRAY}›{RESET} "
-        );
+        println!();
+        print!("  {BOLD_GREEN}▶{RESET} run? {BOLD_GREEN}Y{RESET} {DIM}(default){RESET} / {DIM}N{RESET} ");
         io::stdout().flush().ok();
         let mut line = String::new();
         stdin.lock().read_line(&mut line)?;
@@ -92,29 +92,33 @@ pub(crate) fn confirm(command: &str) -> anyhow::Result<Decision> {
             }
             "n" | "no" => return Ok(Decision::Abort),
             "e" | "edit" => {
-                if let Some(edited) = edit_command(command)? {
-                    return Ok(Decision::Run(edited));
-                } else {
-                    return Ok(Decision::Abort);
-                }
+                copy_to_clipboard(command);
+                println!();
+                println!("  {DIM}copied to clipboard — paste in your shell to edit & run{RESET}");
+                println!();
+                return Ok(Decision::Abort);
             }
             _ => continue,
         }
     }
 }
 
-pub(crate) fn edit_command(initial: &str) -> anyhow::Result<Option<String>> {
-    println!("  {GRAY}│{RESET}  {DIM}edit — empty keeps original{RESET}");
-    print!("  {GRAY}│{RESET}  {DIM}${RESET} {BOLD}{initial}{RESET}\n  {GRAY}╰─{RESET}{YELLOW}✎{RESET}  ");
-    io::stdout().flush().ok();
-    let mut line = String::new();
-    io::stdin().lock().read_line(&mut line)?;
-    let trimmed = line.trim();
-    println!();
-    if trimmed.is_empty() {
-        Ok(Some(initial.to_string()))
-    } else {
-        Ok(Some(trimmed.to_string()))
+/// Number of terminal lines used by print_thinking so clear_thinking can erase them.
+static THINKING_LINES: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// Hide the terminal cursor.
+pub(crate) fn hide_cursor() {
+    if io::stderr().is_terminal() {
+        eprint!("\x1b[?25l");
+        io::stderr().flush().ok();
+    }
+}
+
+/// Show the terminal cursor.
+pub(crate) fn show_cursor() {
+    if io::stderr().is_terminal() {
+        eprint!("\x1b[?25h");
+        io::stderr().flush().ok();
     }
 }
 
@@ -122,17 +126,39 @@ pub(crate) fn print_thinking(backend: Backend, model: &str) {
     if !io::stderr().is_terminal() {
         return;
     }
+    hide_cursor();
     let label = backend_label(backend, model);
-    let (icon, color, name, _) = backend_persona(backend);
+    let (_, color, name, _) = backend_persona(backend);
+    let art = backend_art(backend);
     let verb = match backend {
         Backend::Claude => "is thinking",
         Backend::Codex => "is computing",
         Backend::Openrouter => "is cooking",
         Backend::Auto => "is thinking",
     };
-    eprint!(
-        "\n  {GRAY}╭─{RESET} {BOLD_CYAN}hey{RESET} {GRAY}·{RESET} {label}\n  {GRAY}│{RESET}  {color}{icon}{RESET}  {DIM_ITALIC}{name} {verb}…{RESET}"
-    );
+
+    let mut lines = 0u8;
+    eprint!("\n  {label}");
+    lines += 1;
+    eprintln!();
+    lines += 1;
+
+    if !art.is_empty() {
+        eprint!(
+            "  {color}{}{RESET}  {DIM_ITALIC}{name} {verb}…{RESET}",
+            art[0]
+        );
+        lines += 1;
+        for line in &art[1..] {
+            eprint!("\n  {color}{line}{RESET}");
+            lines += 1;
+        }
+    } else {
+        eprint!("  {DIM_ITALIC}{name} {verb}…{RESET}");
+        lines += 1;
+    }
+
+    THINKING_LINES.store(lines, std::sync::atomic::Ordering::Relaxed);
     io::stderr().flush().ok();
 }
 
@@ -140,8 +166,12 @@ pub(crate) fn clear_thinking() {
     if !io::stderr().is_terminal() {
         return;
     }
-    // Move up 2 lines and clear them so the real block redraws cleanly.
-    eprint!("\r\x1b[K\x1b[1A\r\x1b[K\x1b[1A\r\x1b[K");
+    let lines = THINKING_LINES.load(std::sync::atomic::Ordering::Relaxed);
+    for _ in 0..lines {
+        eprint!("\r\x1b[K\x1b[1A");
+    }
+    eprint!("\r\x1b[K");
+    show_cursor();
     io::stderr().flush().ok();
 }
 
