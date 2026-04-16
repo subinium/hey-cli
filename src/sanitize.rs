@@ -66,10 +66,15 @@ pub(crate) fn looks_like_command(line: &str) -> bool {
     {
         return false;
     }
-    // Reject lines that end with sentence punctuation — also almost always prose.
-    if let Some(last) = t.chars().last() {
-        if matches!(last, '.' | '!' | '?' | ':') && !t.ends_with("..") && !t.ends_with("/.") {
-            return false;
+    // Reject lines that end with sentence punctuation — almost always prose.
+    // But allow `.` and `./` as standalone last tokens (shell path arguments).
+    if let Some(last_char) = t.chars().last() {
+        if matches!(last_char, '.' | '!' | '?' | ':') {
+            let last_word = t.split_whitespace().last().unwrap_or("");
+            let is_path_dot = last_word == "." || last_word == "./" || last_word.ends_with("/.");
+            if !is_path_dot && !t.ends_with("..") {
+                return false;
+            }
         }
     }
     // Accept subshells, env assignments, pipelines, and anything else that starts with

@@ -1,7 +1,7 @@
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::process::{Command, Stdio};
 
-use crate::backend::{backend_label, backend_persona, which_bin};
+use crate::backend::{backend_art, backend_label, backend_persona, which_bin};
 use crate::cli::Backend;
 use crate::risk::Risk;
 use crate::style::*;
@@ -36,7 +36,16 @@ pub(crate) fn print_command_block(
             Risk::Warn => "this one has a sharp edge",
             Risk::Safe => voice,
         };
-        println!("  {GRAY}│{RESET}  {color}{icon}{RESET}  {DIM_ITALIC}{quip}{RESET}");
+        let art = backend_art(backend);
+        if art[0].is_empty() {
+            // No art (Auto backend) — single line with icon
+            println!("  {GRAY}│{RESET}  {color}{icon}{RESET}  {DIM_ITALIC}{quip}{RESET}");
+        } else {
+            // Art + voice on first line, remaining art lines below
+            println!("  {GRAY}│{RESET}  {color}{}{RESET}  {DIM_ITALIC}{quip}{RESET}", art[0]);
+            println!("  {GRAY}│{RESET}  {color}{}{RESET}", art[1]);
+            println!("  {GRAY}│{RESET}  {color}{}{RESET}", art[2]);
+        }
         println!("  {GRAY}│{RESET}");
     }
     for (i, line) in command.lines().enumerate() {

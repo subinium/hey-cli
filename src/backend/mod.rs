@@ -88,6 +88,28 @@ pub(crate) fn backend_label(backend: Backend, model: &str) -> String {
     format!("{color}{icon}{RESET} {BOLD_WHITE_BG}{name}{RESET}{tail}")
 }
 
+/// Small ASCII art mascot per backend. Returns 3 lines of art text (uncolored).
+pub(crate) fn backend_art(backend: Backend) -> [&'static str; 3] {
+    match backend {
+        Backend::Claude => [
+            "▐▛█▜▌",
+            "▝▜██▛▘",
+            "  ▘▝ ",
+        ],
+        Backend::Codex => [
+            " ▗▄▄▖ ",
+            "▐████▌",
+            " ▝▀▀▘ ",
+        ],
+        Backend::Openrouter => [
+            " ▗▄▖",
+            " ▐◆▌",
+            " ▝▀▘",
+        ],
+        Backend::Auto => ["", "", ""],
+    }
+}
+
 /// Returns the full ordered list of backends to try in Auto mode, filtered by
 /// local availability. Claude first (subscription inline), then Codex, then
 /// OpenRouter (HTTP fallback).
