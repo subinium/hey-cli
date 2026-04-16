@@ -48,49 +48,34 @@ Each backend has its own **character**, **color**, and **voice**.
 <table>
 <tr>
 <td align="center" width="33%">
-
-```
-   ▐▛███▜▌
-  ▝▜█████▛▘
-    ▘▘ ▝▝
-```
-
-**✱ Claude**
-
-*"here you go"*
-
-`claude -p` · your subscription
-
+<pre>
+ ▐▛███▜▌
+▝▜█████▛▘
+  ▘▘ ▝▝
+</pre>
+<b>✱ Claude</b><br>
+<i>"here you go"</i><br>
+<code>claude -p</code> · your subscription
 </td>
 <td align="center" width="33%">
-
-```
-  ▄
-   ▀▄
-  ▄▀ ▄▄▄▄▄
-```
-
-**☁ Codex**
-
-*"computed"*
-
-`codex exec` · your subscription
-
+<pre>
+▄
+ ▀▄
+▄▀ ▄▄▄▄▄
+</pre>
+<b>☁ Codex</b><br>
+<i>"computed"</i><br>
+<code>codex exec</code> · your subscription
 </td>
 <td align="center" width="33%">
-
-```
-    /\
-   <◆>
-    \/
-```
-
-**◆ OpenRouter**
-
-*"cooked"*
-
-HTTP API · `OPENROUTER_API_KEY`
-
+<pre>
+  /\
+ &lt;◆&gt;
+  \/
+</pre>
+<b>◆ OpenRouter</b><br>
+<i>"cooked"</i><br>
+HTTP API · <code>OPENROUTER_API_KEY</code>
 </td>
 </tr>
 </table>
