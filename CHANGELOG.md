@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-04-16
+
+### Added
+
+- **Content filter** — prompts containing API keys (`sk-ant-`, `sk-or-`, `AKIA...`, `ghp_`, `gho_`, `glpat-`, `xoxb-`, `xoxp-`), private key headers (`-----BEGIN RSA PRIVATE`, etc.) are blocked before being sent to any backend. Shows which pattern matched. Override with `--allow-sensitive`.
+
+### Improved
+
+- **System prompt compressed** — ~600 tokens → ~120 tokens, saving ~480 input tokens per request. Prompt text is stable to maximize OpenRouter's automatic 5-minute cache TTL.
+- **max_tokens reduced** — 512 → 256. Shell commands are rarely > 50 tokens; tighter cap reduces latency and cost.
+- **HTTP-Referer/X-Title headers** — updated from old `ait` branding to `hey-cli`.
+
 ## [0.2.0] - 2026-04-15
 
 ### Added
@@ -37,5 +49,6 @@ Initial release.
 - Fenced-code-block sanitizer so model responses with triple-backtick wrappers are parsed correctly
 - Strict prose detection — bail out if the backend returns non-command text
 
+[0.2.1]: https://github.com/subinium/hey-cli/releases/tag/v0.2.1
 [0.2.0]: https://github.com/subinium/hey-cli/releases/tag/v0.2.0
 [0.1.0]: https://github.com/subinium/hey-cli/releases/tag/v0.1.0

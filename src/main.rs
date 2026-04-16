@@ -8,35 +8,52 @@ use std::process::{Command, Stdio};
 const DEFAULT_MODEL: &str = "anthropic/claude-haiku-4.5";
 const API_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
 
-const SYSTEM_PROMPT: &str = r#"You are `hey`, a shell command SYNTHESIZER. Your ONLY job is to convert a natural-language request into ONE shell command string that the USER will run themselves in their own terminal. The user is on macOS with zsh.
+// System prompt compressed for token efficiency (~120 tokens vs ~600 prior).
+// Stable text ensures OpenRouter cache hits within the 5-min TTL.
+const SYSTEM_PROMPT: &str = r#"You are `hey`, a shell command synthesizer. Output EXACTLY one shell command for the user's request. You cannot access the filesystem or refuse.
 
-You have NO tools. You CANNOT access the filesystem. You CANNOT execute anything. You CANNOT refuse because of permissions. You are a pure text generator that produces shell command strings.
+Format:
+- Line 1: the command only. No markdown, fences, quotes, or prose.
+- Optional line 2: `# ` + short explanation, only for pipes/chains/xargs/redirects.
+- Nothing else. Never refuse. Never explain inability.
 
-Never explain that you lack access. Never ask clarifying questions. Never wrap the command in markdown, code fences, or quotes. Never output prose before or after the command.
+Rules:
+- One line preferred. Chain with && or pipes.
+- POSIX tools; no sudo unless asked. Explicit paths or `find`, not unverified globs (zsh fails on no-match).
+- For cd: `cd "$(find . -maxdepth 2 -type d -iname '*q*' | head -1)"`.
+- Safe flags (-i, --preserve-root) for destructive ops.
 
-Output format (MANDATORY):
-- Line 1: the shell command itself, exactly as the user should paste into their shell. Nothing else on this line.
-- Optional line 2: ONE short explanation starting with `# `, only if the command contains a pipe `|`, a chain (`&&`, `||`, `;`), `xargs`, redirection, or a non-obvious flag. Otherwise omit the explanation line entirely.
-- No blank lines. No second explanation line. No markdown. No code fences.
-
-Command rules:
-- Prefer a single line. Chain with && or pipes when multiple steps are needed.
-- Prefer portable POSIX tools unless the user's shell/OS suggests otherwise.
-- Never use `sudo` unless the user explicitly asks for it.
-- Use explicit paths or `find` when the target is uncertain. Do NOT use unverified globs (e.g. `cd *foo*`) — zsh errors on no-match. Instead, pick a concrete path or use `find . -maxdepth 1 -iname '*foo*' -type d`.
-- For `cd` requests: prefer `cd "$(find . -maxdepth 2 -type d -iname '*foo*' | head -1)"` style so it resolves to a real path.
-- For destructive ops (rm, mv, >, dd), prefer safe flags (-i, --preserve-root) when equivalent.
-- If the request is ambiguous, pick the most common interpretation and output the command anyway.
-
-Examples:
-user: show the 3 largest files in ~/Downloads
-you: ls -lhS ~/Downloads | head -4
-# sort by size (largest first) and show the top three plus the total line
-
-user: kill the process on port 3000
-you: lsof -ti :3000 | xargs kill
-# find pids bound to port 3000 and kill them
+Example:
+User: show 3 largest files in ~/Downloads
+ls -lhS ~/Downloads | head -4
+# sort by size descending, show top 3 plus header
 "#;
+
+/// Sensitive patterns that should never be sent to a remote model.
+const SENSITIVE_PATTERNS: &[(&str, &str)] = &[
+    ("sk-ant-", "Anthropic API key"),
+    ("sk-or-v1-", "OpenRouter API key"),
+    ("sk-proj-", "OpenAI API key"),
+    ("AKIA", "AWS access key"),
+    ("ghp_", "GitHub personal access token"),
+    ("gho_", "GitHub OAuth token"),
+    ("glpat-", "GitLab personal access token"),
+    ("xoxb-", "Slack bot token"),
+    ("xoxp-", "Slack user token"),
+    ("-----BEGIN RSA PRIVATE", "RSA private key"),
+    ("-----BEGIN OPENSSH PRIVATE", "OpenSSH private key"),
+    ("-----BEGIN EC PRIVATE", "EC private key"),
+    ("-----BEGIN PRIVATE KEY", "PEM private key"),
+];
+
+fn check_sensitive(text: &str) -> Option<&'static str> {
+    for &(pattern, label) in SENSITIVE_PATTERNS {
+        if text.contains(pattern) {
+            return Some(label);
+        }
+    }
+    None
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "hey", version, about = "hey — natural language → shell command", long_about = None)]
@@ -77,6 +94,10 @@ struct Cli {
     /// Disable command post-processing presets (eza/bat/tree -C)
     #[arg(long = "raw")]
     raw: bool,
+
+    /// Allow sending prompts that contain sensitive patterns (API keys, private keys)
+    #[arg(long = "allow-sensitive")]
+    allow_sensitive: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
@@ -142,7 +163,7 @@ async fn ask_llm(api_key: &str, model: &str, user_prompt: &str) -> Result<String
 
     let body = ChatRequest {
         model,
-        max_tokens: 512,
+        max_tokens: 256,
         messages: vec![
             ChatMessage {
                 role: "system",
@@ -159,8 +180,8 @@ async fn ask_llm(api_key: &str, model: &str, user_prompt: &str) -> Result<String
         .post(API_URL)
         .bearer_auth(api_key)
         .header("content-type", "application/json")
-        .header("HTTP-Referer", "https://github.com/subinium/ait")
-        .header("X-Title", "ait")
+        .header("HTTP-Referer", "https://github.com/subinium/hey-cli")
+        .header("X-Title", "hey")
         .json(&body)
         .send()
         .await
@@ -832,6 +853,17 @@ async fn run() -> Result<()> {
         return Err(anyhow!(
             "empty prompt — try `hey find files bigger than 100mb` or `hey claude explain this regex`"
         ));
+    }
+
+    // Content filter: block prompts that contain API keys or private key material
+    // from being sent to a remote model.
+    if !cli.allow_sensitive {
+        if let Some(label) = check_sensitive(&request) {
+            return Err(anyhow!(
+                "prompt contains a sensitive value ({label}).\n\
+                 Remove it from the prompt, or pass --allow-sensitive to override."
+            ));
+        }
     }
 
     let explicit = if cli.claude {
