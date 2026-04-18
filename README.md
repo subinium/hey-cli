@@ -15,11 +15,18 @@
 cargo install ai-in-terminal
 ```
 
+![hey demo](./demo.gif)
+
 </div>
 
 ---
 
 ## See it in action
+
+That's the whole workflow: **type → read → enter**. Re-render the demo with `vhs demo.tape` after changing the UI.
+
+<details>
+<summary>Text version (copy-paste friendly)</summary>
 
 ```
 $ hey claude find the 5 largest files in Downloads
@@ -37,7 +44,7 @@ $ hey claude find the 5 largest files in Downloads
   ▶ run? Y (default) / N
 ```
 
-That's the whole workflow: **type → read → enter**.
+</details>
 
 ---
 

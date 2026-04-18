@@ -3,3 +3,7 @@ Cargo.lock.bak
 .env
 .env.local
 .omx/
+
+# VHS video-format renders are not committed (the README uses demo.gif).
+demo.mp4
+demo.webm
