@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-18
+
+### Fixed
+
+- **Shell command line no longer erased** — `print_thinking` counted the `art[0]` / fallback `thinking…` row as an extra line advance even though it had no trailing `\n`. `clear_thinking` then walked one line too far up, and the final `\r\x1b[J` wiped the user's original `$ hey …` prompt line from the terminal. The off-by-one is fixed, so the shell command that invoked `hey` stays visible in scrollback.
+- **Thinking block spacing matches the result view** — added a blank row between the backend label and the mascot so the thinking layout has the same vertical rhythm as `print_command_block`'s output. Previously the label and mascot touched during thinking, then a gap appeared once the result rendered.
+
 ## [0.4.0] - 2026-04-17
 
 Security audit + UX pass. Breaking in a few narrow places but safer everywhere.

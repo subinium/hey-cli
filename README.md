@@ -267,9 +267,8 @@ hey このディレクトリのRustファイルの行数を数えて
 ## Roadmap
 
 - [ ] `hey --last` / `hey --retry` — command history & recall
-- [ ] `hey init zsh` — shell function so `cd`/`export` work in the parent shell
+- [ ] Parent-shell eval mode — so `cd`/`export` suggested by `hey` affect the caller's shell
 - [ ] Per-directory `.heyrc` for project-specific prompts
-- [ ] `hey doctor` — diagnose backends, tools, auth
 - [ ] Streaming output
 - [ ] Homebrew tap
 

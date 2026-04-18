@@ -174,22 +174,26 @@ pub(crate) fn print_thinking(backend: Backend, model: &str) {
     let mut lines = 0u8;
     eprint!("\n  {label}");
     lines += 1;
+    // Two blank lines after the label so the mascot sits one row below it,
+    // matching the spacing print_command_block uses for the result view.
+    eprintln!();
+    lines += 1;
     eprintln!();
     lines += 1;
 
+    // art[0] / the fallback "thinking…" text lands on the current (post-eprintln)
+    // row without a trailing \n, so it does not advance a line — don't count it.
     if !art.is_empty() {
         eprint!(
             "  {color}{}{RESET}  {DIM_ITALIC}{name} {verb}…{RESET}",
             art[0]
         );
-        lines += 1;
         for line in &art[1..] {
             eprint!("\n  {color}{line}{RESET}");
             lines += 1;
         }
     } else {
         eprint!("  {DIM_ITALIC}{name} {verb}…{RESET}");
-        lines += 1;
     }
 
     THINKING_LINES.store(lines, std::sync::atomic::Ordering::Relaxed);
