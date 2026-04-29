@@ -228,9 +228,13 @@ async fn run() -> Result<()> {
             "backend returned prose instead of a command:\n\n{preview}\n\nTry a different backend with `hey claude ...` / `hey codex ...` / `hey openrouter ...`."
         ));
     }
-    if !cli.raw {
-        command = apply_presets(&command);
-    }
+    let preset_label = if cli.raw {
+        None
+    } else {
+        let (rewritten, label) = apply_presets(&command);
+        command = rewritten;
+        label
+    };
 
     let (risk, risk_note) = assess_risk(&command);
     let blocked = matches!(risk, Risk::Block);
@@ -242,6 +246,7 @@ async fn run() -> Result<()> {
         &model,
         risk,
         risk_note,
+        preset_label,
         closed,
     );
 
