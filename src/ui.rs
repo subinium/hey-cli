@@ -11,6 +11,7 @@ pub(crate) enum Decision {
     Abort,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn print_command_block(
     command: &str,
     explanation: Option<&str>,
@@ -18,6 +19,7 @@ pub(crate) fn print_command_block(
     model: &str,
     risk: Risk,
     risk_note: Option<&str>,
+    preset_label: Option<&str>,
     closed: bool,
 ) {
     let label = backend_label(backend, model);
@@ -55,6 +57,10 @@ pub(crate) fn print_command_block(
         } else {
             println!("    {BOLD_WHITE}{line}{RESET}");
         }
+    }
+
+    if let Some(label) = preset_label {
+        println!("    {DIM_GRAY}preset: {label}{RESET}");
     }
 
     if let Some(expl) = explanation {
