@@ -59,6 +59,7 @@ jobs:
           archive: $bin-$target
           tar: unix
           zip: none
+          checksum: sha256
           token: ${{ secrets.GITHUB_TOKEN }}
 
   publish-crate:
