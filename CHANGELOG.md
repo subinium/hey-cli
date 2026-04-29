@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-29
+
+### Security
+
+- **Risk gate: three dead branches fixed.** `curl ... | sh` / `wget ... | bash` (and `... | sudo bash`) were not warned because the segment-level check looked for `|` inside a segment whose `|` had already been consumed by `split_segments`. The detection moved to the whole-command level, mirroring `contains_decoded_shell`, and strips plumbing on the consumer side so `sudo bash` is also caught.
+- **`Rscript -e '...'` now warns.** The interpreter match arm matched `"Rscript"`, but `normalize_for_risk` lowercases the input — the arm was unreachable.
+- **`tee file < /dev/null` now blocks.** `tee` opens its arg files with `O_TRUNC`, so reading EOF from `/dev/null` truncates them. The previous segment-level check was unreachable for the same reason as `curl|sh`. Detection moved to the whole-command level.
+- 6 new unit tests for the regressions above.
+
+### UX
+
+- **Preset rewrite preview.** When `apply_presets` swaps the binary the model returned for a different one (`cat → bat`, `cat → jq`, `ls → eza`, `tree → eza`, `diff → delta`), a single dim line under the command shows what changed. Pure flag additions (`grep --color`, `tree -C`) stay silent. Helps users distinguish local rewrites from model output. Use `--raw` to disable.
+
+### Release
+
+- **SHA-256 checksums published.** `taiki-e/upload-rust-binary-action` now emits a `<archive>.sha256` file alongside each release archive. Verifiable with `shasum -a 256 -c hey-aarch64-apple-darwin.tar.gz.sha256`. Useful for the upcoming Homebrew tap and any curl-based installer.
+
 ## [0.5.0] - 2026-04-18
 
 ### Fixed
@@ -107,6 +124,8 @@ Initial release.
 - Fenced-code-block sanitizer so model responses with triple-backtick wrappers are parsed correctly
 - Strict prose detection — bail out if the backend returns non-command text
 
+[0.6.0]: https://github.com/subinium/hey-cli/releases/tag/v0.6.0
+[0.5.0]: https://github.com/subinium/hey-cli/releases/tag/v0.5.0
 [0.4.0]: https://github.com/subinium/hey-cli/releases/tag/v0.4.0
 [0.2.2]: https://github.com/subinium/hey-cli/releases/tag/v0.2.2
 [0.2.1]: https://github.com/subinium/hey-cli/releases/tag/v0.2.1
